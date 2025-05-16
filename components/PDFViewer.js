@@ -1,206 +1,219 @@
-// components/PDFViewer.js
+// /Users/michaelnseula/Downloads/PDFReactFrontend/components/PDFViewer.js
 import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, View, PanResponder, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, Dimensions, Platform } from 'react-native';
 import Pdf from 'react-native-pdf';
-import { toolModes } from '../constants';
-import AnnotationMarker from './AnnotationMarker';
-import RedactionBox from './RedactionBox';
-import CropOverlay from './CropOverlay';
+import { TapGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 
-const PDFViewer = forwardRef(({ 
-  uri, 
-  annotations, 
-  redactions, 
-  cropArea, 
-  mode,
+const PDFViewer = forwardRef(({
+  uri,
+  annotations = [],
+  redactions = [],
+  cropArea = null,
+  // mode, // mode prop is available if needed for specific gesture logic
   onTap,
-  onDrag
+  onDrag,
 }, ref) => {
-  const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1);
-  const [dragStart, setDragStart] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageWidth, setPageWidth] = useState(0);
+  const [pageHeight, setPageHeight] = useState(0);
+
+  const panStartCoords = useRef({ x: 0, y: 0 });
   const pdfRef = useRef(null);
 
-  // Calculate PDF content dimensions based on device dimensions
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
-  
-  // Expose methods to parent component
+  // useImperativeHandle can be used to expose functions to the parent component via ref
   useImperativeHandle(ref, () => ({
-    getCurrentPage: () => currentPage,
-    getTotalPages: () => totalPages
+    // Example: jumpToPage: (pageNumber) => pdfRef.current?.setPage(pageNumber),
   }));
 
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => mode !== toolModes.VIEW,
-    
-    onPanResponderGrant: (evt, gestureState) => {
-      const { locationX, locationY } = evt.nativeEvent;
-      
-      if (mode === toolModes.CROP || mode === toolModes.REDACT) {
-        setDragStart({ x: locationX, y: locationY });
-      } else if (mode === toolModes.ANNOTATE) {
-        onTap(currentPage, locationX, locationY, pdfDimensions.width, pdfDimensions.height);
+  const source = { uri, cache: true };
+
+  const handlePdfLoadComplete = (numberOfPages, filePath, { width, height }) => {
+    setTotalPages(numberOfPages);
+    // Use the dimensions of the first page as initial dimensions
+    setPageWidth(width);
+    setPageHeight(height);
+    setCurrentPage(1); // Ensure we are on page 1
+    if (pdfRef.current) {
+        pdfRef.current.setPage(1);
+    }
+  };
+
+  const handlePageChanged = (page, numberOfPages, { width, height }) => {
+    setCurrentPage(page);
+    // Update dimensions if they change per page (e.g., mixed orientations)
+    setPageWidth(width);
+    setPageHeight(height);
+  };
+
+  const handleSingleTapStateChange = (event) => {
+    if (event.nativeEvent.state === State.END) { // Tap gesture has ended
+      const { x, y } = event.nativeEvent;
+      if (onTap && pageWidth > 0 && pageHeight > 0) {
+        onTap(currentPage, x, y, pageWidth, pageHeight);
       }
-    },
-    
-    onPanResponderMove: (evt, gestureState) => {
-      // Handle drag operations for crop and redact modes
-      // Nothing needed here as we're tracking the drag end
-    },
-    
-    onPanResponderRelease: (evt, gestureState) => {
-      if (!dragStart) return;
-      
-      const { locationX, locationY } = evt.nativeEvent;
-      
-      // Only process if there was significant movement
-      const dragDistance = Math.sqrt(
-        Math.pow(locationX - dragStart.x, 2) + 
-        Math.pow(locationY - dragStart.y, 2)
-      );
-      
-      if (dragDistance > 10) { // Minimum drag distance threshold
+    }
+  };
+
+  const handlePanStateChange = (event) => {
+    const { x, y, state, oldState } = event.nativeEvent;
+
+    if (state === State.BEGAN) {
+      panStartCoords.current = { x, y };
+    } else if (oldState === State.ACTIVE && (state === State.END || state === State.CANCELLED || state === State.FAILED)) {
+      if (onDrag && pageWidth > 0 && pageHeight > 0) {
         onDrag(
           currentPage,
-          dragStart.x,
-          dragStart.y,
-          locationX,
-          locationY,
-          pdfDimensions.width,
-          pdfDimensions.height
+          panStartCoords.current.x,
+          panStartCoords.current.y,
+          x, // last known x
+          y, // last known y
+          pageWidth,
+          pageHeight
         );
-      } else if (mode === toolModes.REDACT) {
-        // If the drag was too short, treat it as a tap for redaction
-        onTap(currentPage, locationX, locationY, pdfDimensions.width, pdfDimensions.height);
       }
-      
-      setDragStart(null);
     }
-  });
-
-  const handleLoadComplete = (numberOfPages, filePath) => {
-    setTotalPages(numberOfPages);
   };
 
-  const handlePageChanged = (page) => {
-    setCurrentPage(page);
-  };
+  const renderOverlays = () => {
+    if (pageWidth === 0 || pageHeight === 0) return null;
 
-  const handleError = (error) => {
-    console.error('PDF error:', error);
-  };
+    // Filter items for the current page
+    const pageAnnotations = annotations.filter(a => a.pageNumber === currentPage);
+    const pageRedactions = redactions.filter(r => r.pageNumber === currentPage);
+    let pageCropArea = null;
+    if (cropArea && cropArea.pageNumber === currentPage) {
+      pageCropArea = cropArea;
+    }
 
-  const renderAnnotations = () => {
-    // Only render annotations for the current page
-    return annotations
-      .filter(ann => ann.pageNumber === currentPage)
-      .map((annotation, index) => (
-        <AnnotationMarker
-          key={`annotation-${index}`}
-          x={annotation.x * pdfDimensions.width}
-          y={annotation.y * pdfDimensions.height}
-          text={annotation.text}
-        />
-      ));
-  };
-
-  const renderRedactions = () => {
-    // Only render redactions for the current page
-    return redactions
-      .filter(red => red.pageNumber === currentPage)
-      .map((redaction, index) => (
-        <RedactionBox
-          key={`redaction-${index}`}
-          x={redaction.x * pdfDimensions.width}
-          y={redaction.y * pdfDimensions.height}
-          width={redaction.width * pdfDimensions.width}
-          height={redaction.height * pdfDimensions.height}
-        />
-      ));
-  };
-
-  const renderCropOverlay = () => {
-    if (!cropArea || cropArea.pageNumber !== currentPage) return null;
-    
     return (
-      <CropOverlay
-        left={cropArea.left * pdfDimensions.width}
-        top={cropArea.top * pdfDimensions.height}
-        width={cropArea.width * pdfDimensions.width}
-        height={cropArea.height * pdfDimensions.height}
-      />
-    );
-  };
-
-  return (
-    <View style={styles.container} {...panResponder.panHandlers}>
-      <Pdf
-        ref={pdfRef}
-        source={{ uri }}
-        style={styles.pdf}
-        onLoadComplete={handleLoadComplete}
-        onPageChanged={handlePageChanged}
-        onError={handleError}
-        onSize={(width, height) => setPdfDimensions({ width, height })}
-        enablePaging={true}
-        enableAnnotationRendering={false} // We're handling annotations ourselves
-        fitPolicy={0} // Width fit policy
-        minScale={0.5}
-        maxScale={3.0}
-        scale={scale}
-      />
-      
-      {/* Overlay layers for annotations, redactions, and crop area */}
-      <View style={[styles.overlayContainer, { width: pdfDimensions.width, height: pdfDimensions.height }]}>
-        {renderAnnotations()}
-        {renderRedactions()}
-        {renderCropOverlay()}
-        
-        {/* Show drag start indicator if dragging */}
-        {dragStart && (mode === toolModes.CROP || mode === toolModes.REDACT) && (
-          <View 
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+        {pageAnnotations.map((anno, index) => (
+          <View
+            key={`anno-${index}-${anno.x}-${anno.y}`}
             style={[
-              styles.dragStart, 
-              { left: dragStart.x - 5, top: dragStart.y - 5 }
-            ]} 
+              styles.annotation,
+              {
+                left: anno.x * pageWidth,
+                top: anno.y * pageHeight,
+              },
+            ]}
+          >
+            <Text style={styles.annotationText}>{anno.text}</Text>
+          </View>
+        ))}
+        {pageRedactions.map((redact, index) => (
+          <View
+            key={`redact-${index}-${redact.x}-${redact.y}`}
+            style={[
+              styles.redaction,
+              {
+                left: redact.x * pageWidth,
+                top: redact.y * pageHeight,
+                width: redact.width * pageWidth,
+                height: redact.height * pageHeight,
+              },
+            ]}
+          />
+        ))}
+        {pageCropArea && (
+          <View
+            style={[
+              styles.cropArea,
+              {
+                left: pageCropArea.left * pageWidth,
+                top: pageCropArea.top * pageHeight,
+                width: pageCropArea.width * pageWidth,
+                height: pageCropArea.height * pageHeight,
+              },
+            ]}
           />
         )}
       </View>
-    </View>
+    );
+  };
+
+  if (!uri) {
+    return (
+      <View style={[styles.pdfWrapper, styles.placeholder]}>
+        <Text>No PDF URI provided.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <PanGestureHandler
+      onHandlerStateChange={handlePanStateChange}
+      minDist={10} // Minimum movement before pan activates
+    >
+      <View style={styles.gestureContainer}>
+        <TapGestureHandler
+          onHandlerStateChange={handleSingleTapStateChange}
+          numberOfTaps={1}
+        >
+          <View style={styles.pdfWrapper}>
+            <Pdf
+              ref={pdfRef}
+              source={source}
+              onLoadComplete={handlePdfLoadComplete}
+              onPageChanged={handlePageChanged}
+              onError={(error) => {
+                console.error('PDF Error:', error);
+                // Alert.alert('PDF Error', 'Could not load PDF.');
+              }}
+              style={styles.pdf}
+              trustAllCerts={Platform.OS === 'ios'} // For iOS, if using self-signed certs for remote URIs. Not relevant for local file URIs.
+              // horizontal={false} // Set to true for horizontal layout
+              // enablePaging={true} // Snaps to page boundaries
+            />
+            {renderOverlays()}
+          </View>
+        </TapGestureHandler>
+      </View>
+    </PanGestureHandler>
   );
 });
 
 const styles = StyleSheet.create({
-  container: {
+  gestureContainer: {
     flex: 1,
-    justifyContent: 'flex-start',
+  },
+  pdfWrapper: {
+    flex: 1,
+    backgroundColor: '#e0e0e0', // Background for the PDF area
+    position: 'relative', // Needed for absolute positioning of overlays
+  },
+  placeholder: {
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5FCFF',
   },
   pdf: {
     flex: 1,
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#ECECEC',
+    width: Dimensions.get('window').width, // Or adjust if PDFViewer is not full width
+    // height: Dimensions.get('window').height, // flex: 1 should handle height
   },
-  overlayContainer: {
+  annotation: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    backgroundColor: 'transparent',
-    pointerEvents: 'none',
+    backgroundColor: 'rgba(255, 255, 0, 0.5)', // Semi-transparent yellow
+    padding: 3,
+    borderRadius: 3,
+    borderWidth: 0.5,
+    borderColor: '#cca300',
   },
-  dragStart: {
+  annotationText: {
+    fontSize: 10,
+    color: '#333',
+  },
+  redaction: {
     position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(0, 127, 255, 0.7)',
-  }
+    backgroundColor: 'black',
+  },
+  cropArea: {
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 0, 255, 0.7)',
+    backgroundColor: 'rgba(0, 0, 255, 0.15)',
+  },
 });
 
 export default PDFViewer;

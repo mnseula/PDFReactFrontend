@@ -18,6 +18,7 @@ export default function App() {
   const [annotations, setAnnotations] = useState([]);
   const [redactions, setRedactions] = useState([]);
   const [cropArea, setCropArea] = useState(null);
+  const [watermarkText, setWatermarkText] = useState('');
   
   const pdfViewerRef = useRef(null);
 
@@ -34,6 +35,7 @@ export default function App() {
         setAnnotations([]);
         setRedactions([]);
         setCropArea(null);
+        setWatermarkText(''); // Reset watermark text
         setCurrentMode(toolModes.VIEW);
       }
     } catch (error) {
@@ -44,6 +46,18 @@ export default function App() {
 
   const handleToolChange = (mode) => {
     setCurrentMode(mode);
+    if (mode === toolModes.WATERMARK) {
+      Alert.prompt(
+        'Enter Watermark Text',
+        'Please enter the text you want to use as a watermark:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'OK', onPress: (text) => setWatermarkText(text || '') },
+        ],
+        'plain-text',
+        watermarkText // Default value for the prompt
+      );
+    }
   };
 
   const handleTap = (pageNumber, x, y, pageWidth, pageHeight) => {
@@ -153,6 +167,14 @@ export default function App() {
         case toolModes.OCR:
           resultUri = await api.ocrPDF(base64);
           break;
+
+        case toolModes.WATERMARK:
+          if (watermarkText) {
+            resultUri = await api.watermarkPDF(base64, { text: watermarkText });
+          } else {
+            Alert.alert('Error', 'Please set watermark text first via the toolbar');
+          }
+          break;
           
         default:
           Alert.alert('Error', 'Please select an operation to perform');
@@ -161,6 +183,14 @@ export default function App() {
       if (resultUri) {
         setPdfUri(resultUri);
         Alert.alert('Success', 'PDF processed successfully');
+        // Reset interactive elements after successful processing
+        // as they are now part of the new PDF
+        setAnnotations([]);
+        setRedactions([]);
+        setCropArea(null);
+        // Watermark text can remain if user wants to apply same watermark to another doc
+        // or it can be reset: setWatermarkText(''); 
+        // For now, we'll keep it. If reset is desired, uncomment the line above.
       }
     } catch (error) {
       Alert.alert('Error', `Failed to process PDF: ${error.message}`);
@@ -235,6 +265,7 @@ export default function App() {
                currentMode === toolModes.CROP ? 'Define crop area' :
                currentMode === toolModes.COMPRESS ? 'Ready to compress' :
                currentMode === toolModes.OCR ? 'Ready for OCR' :
+               currentMode === toolModes.WATERMARK ? `Watermark: "${watermarkText || 'Not set'}"` :
                'Select a tool'}
             </Text>
           </View>
