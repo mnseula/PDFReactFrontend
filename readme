@@ -1,0 +1,79 @@
+/ Installation and Setup Guide
+PDF Processor App - Installation & Setup Guide
+This document provides instructions for setting up and running the React Native PDF Processor app with Expo.
+Prerequisites
+Before you begin, ensure you have the following installed on your system:
+
+Node.js (v16 or later)
+npm or yarn
+Expo CLI (npm install -g expo-cli)
+Expo Go app on your mobile device (for testing)
+
+Installation Steps
+
+Clone or download the project
+Install dependencies
+Navigate to the project directory and run:
+bashnpm install
+# or
+yarn install
+
+Additional setup for native modules
+The app uses react-native-pdf which has native dependencies. Since we're using Expo, we need to make sure we have the proper setup:
+For iOS:
+bashcd ios
+pod install
+cd ..
+
+Start the development server
+bashnpm start
+# or
+yarn start
+
+Running on a device/simulator
+
+Scan the QR code with the Expo Go app (Android) or the Camera app (iOS)
+Or press 'i' for iOS simulator or 'a' for Android emulator (if configured)
+
+
+
+Configuration
+API Endpoint
+The app is configured to use the PDF processing API at https://ftp.mikkul.com. If you need to change this:
+
+Open services/APIService.js
+Modify the API_BASE_URL constant to point to your API server
+
+javascriptconst API_BASE_URL = 'https://your-api-server.com';
+File Storage
+The app uses Expo's FileSystem module to store processed PDFs in the device's cache directory. This is suitable for most use cases, but files may be cleared when the device is low on storage. For more permanent storage, consider implementing a solution using AsyncStorage or a dedicated file storage service.
+Features and Usage
+The app provides the following PDF processing capabilities:
+
+View PDF - Basic PDF viewer functionality
+Crop PDF - Draw a crop area by dragging on the PDF
+Annotate PDF - Tap on the PDF to add annotations
+Redact PDF - Draw redaction boxes by dragging or tapping on the PDF
+Compress PDF - Compress the PDF to reduce file size
+OCR PDF - Apply optical character recognition to the PDF
+
+Troubleshooting
+
+"Cannot read properties of undefined" error
+This usually occurs when the PDF file is not accessible or corrupted. Try with a different PDF file.
+API connection errors
+Ensure that the API server is running and accessible. Check the URL in APIService.js.
+Permission errors on Android
+Ensure that the app has the necessary permissions enabled in your device settings.
+
+Extending the App
+Adding New PDF Operations
+To add a new PDF operation:
+
+Add a new tool mode in constants.js
+Create the corresponding UI component if needed
+Implement the API call in APIService.js
+Add handling logic in the App.js file
+
+License
+This project is licensed under the MIT License - see the LICENSE file for details.
