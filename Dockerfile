@@ -9,15 +9,15 @@ WORKDIR /usr/src/app
 # --- Install Cocoapods ---
 # Install Ruby, Java, Android SDK dependencies, and other build essentials.
 # This section is for Debian-based Node images (like node:18, node:20).
+# --- Install Cocoapods ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ruby \
     ruby-dev \
     build-essential \
-    openjdk-11-jdk \
+    openjdk-17-jdk \  # Updated
     wget \
     unzip \
     && rm -rf /var/lib/apt/lists/*
-
 # Install Cocoapods using gem
 RUN gem install cocoapods
 
