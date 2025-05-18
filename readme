@@ -1,79 +1,100 @@
-/ Installation and Setup Guide
-PDF Processor App - Installation & Setup Guide
-This document provides instructions for setting up and running the React Native PDF Processor app with Expo.
+PDF Processor App - Production Docker Setup
+This guide will help you set up and run the PDF Processor app in production mode using Docker and Nginx as a reverse proxy.
+
 Prerequisites
-Before you begin, ensure you have the following installed on your system:
+Before you begin, make sure you have the following installed on your system:
 
-Node.js (v16 or later)
-npm or yarn
-Expo CLI (npm install -g expo-cli)
-Expo Go app on your mobile device (for testing)
+Docker
+Docker Compose
+Quick Production Setup
+For a quick production deployment, use the included deploy script:
 
-Installation Steps
+bash
+# Make the script executable
+chmod +x deploy-production.sh
 
-Clone or download the project
-Install dependencies
-Navigate to the project directory and run:
-bashnpm install
-# or
-yarn install
+# Run the deployment script
+./deploy-production.sh
+The script will:
 
-Additional setup for native modules
-The app uses react-native-pdf which has native dependencies. Since we're using Expo, we need to make sure we have the proper setup:
-For iOS:
-bashcd ios
-pod install
-cd ..
+Set up the necessary directories
+Build the Docker images
+Start the containers in production mode
+Configure Nginx as a reverse proxy
+Once deployed, the app will be accessible at:
 
-Start the development server
-bashnpm start
-# or
-yarn start
+http://localhost
+Manual Setup
+If you prefer to set things up manually, follow these steps:
 
-Running on a device/simulator
+1. Build the Docker images
+bash
+docker-compose build
+2. Run the application
+bash
+docker-compose up -d
+3. Check the status
+bash
+docker-compose ps
+Container Architecture
+This setup includes two containers:
 
-Scan the QR code with the Expo Go app (Android) or the Camera app (iOS)
-Or press 'i' for iOS simulator or 'a' for Android emulator (if configured)
+pdf-processor-app - Runs the Expo web app in production mode on port 8081
+nginx - Acts as a reverse proxy, forwarding requests from port 80 to the app container
+The Nginx configuration includes:
 
+Proper HTTP headers for security
+Gzip compression for faster loading
+Handling of WebSocket connections for real-time features
+Error page configuration
+Configuration Files
+Dockerfile - Builds the application for production
+docker-compose.yml - Configures both the app and Nginx containers
+nginx.conf - Sets up the Nginx reverse proxy
+Logs and Troubleshooting
+To view logs from both containers:
 
+bash
+docker-compose logs -f
+To restart the services:
 
-Configuration
-API Endpoint
-The app is configured to use the PDF processing API at https://ftp.mikkul.com. If you need to change this:
+bash
+docker-compose restart
+To stop all services:
 
-Open services/APIService.js
-Modify the API_BASE_URL constant to point to your API server
+bash
+docker-compose down
+Customization
+Changing the Port
+If you need to use a different port than 80 for the web interface, modify the ports section in docker-compose.yml:
 
-javascriptconst API_BASE_URL = 'https://your-api-server.com';
-File Storage
-The app uses Expo's FileSystem module to store processed PDFs in the device's cache directory. This is suitable for most use cases, but files may be cleared when the device is low on storage. For more permanent storage, consider implementing a solution using AsyncStorage or a dedicated file storage service.
-Features and Usage
-The app provides the following PDF processing capabilities:
+yaml
+nginx:
+  ports:
+    - "8080:80"  # Change 8080 to your desired port
+SSL/HTTPS Configuration
+To enable HTTPS, you'll need to modify the Nginx configuration to include SSL certificates. Add the following to nginx.conf:
 
-View PDF - Basic PDF viewer functionality
-Crop PDF - Draw a crop area by dragging on the PDF
-Annotate PDF - Tap on the PDF to add annotations
-Redact PDF - Draw redaction boxes by dragging or tapping on the PDF
-Compress PDF - Compress the PDF to reduce file size
-OCR PDF - Apply optical character recognition to the PDF
+nginx
+server {
+    listen 443 ssl;
+    server_name localhost;
+    
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    
+    # Rest of your configuration...
+}
+Then update docker-compose.yml to mount your certificates:
 
-Troubleshooting
-
-"Cannot read properties of undefined" error
-This usually occurs when the PDF file is not accessible or corrupted. Try with a different PDF file.
-API connection errors
-Ensure that the API server is running and accessible. Check the URL in APIService.js.
-Permission errors on Android
-Ensure that the app has the necessary permissions enabled in your device settings.
-
-Extending the App
-Adding New PDF Operations
-To add a new PDF operation:
-
-Add a new tool mode in constants.js
-Create the corresponding UI component if needed
-Implement the API call in APIService.js
-Add handling logic in the App.js file
-
-License
-This project is licensed under the MIT License - see the LICENSE file for details.
+yaml
+nginx:
+  volumes:
+    - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    - ./ssl:/etc/nginx/ssl
+Production Considerations
+Set up proper domain names in nginx.conf
+Configure proper SSL certificates for HTTPS
+Set up proper monitoring and logging
+Configure firewall rules to only expose necessary ports
+Consider setting up a CI/CD pipeline for automated deployments
