@@ -1,47 +1,58 @@
 # syntax=docker/dockerfile:1.4
-# --- Stage 1: Build ---
+# --- Stage 1: Build dependencies ---
+FROM node:18-alpine AS dependencies
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies first
+RUN npm ci --only=production --legacy-peer-deps
+
+# --- Stage 2: Build app ---
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# 1. Install system dependencies
-RUN apk add --no-cache \
-    bash git python3 make g++ \
-    jpeg-dev cairo-dev pango-dev giflib-dev
+# Install only the minimal required system dependencies with cleanup in the same layer
+RUN apk add --no-cache --virtual .build-deps \
+    python3 make g++ \
+    jpeg-dev cairo-dev pango-dev giflib-dev \
+    && rm -rf /var/cache/apk/*
 
-# 2. Set environment variables
+# Copy production node_modules
+COPY --from=dependencies /app/node_modules ./node_modules
+
+# Set environment variables
 ENV NODE_ENV=production \
     CI=true \
-    EXPO_USE_STATIC=1 \
-    NPM_CONFIG_LOGLEVEL=verbose
+    EXPO_USE_STATIC=1
 
-# 3. Copy package files first for better layer caching
+# Copy only necessary app files
 COPY package*.json ./
+COPY app.json ./
+COPY tsconfig*.json ./
+COPY babel.config.js ./
+COPY ./src ./src
+COPY ./assets ./assets
+COPY ./public ./public
 
-# 4. Install dependencies with improved error handling and networking settings
-RUN npm cache clean --force && \
-    npm config set network-timeout 300000 && \
-    npm install --legacy-peer-deps --no-optional || \
-    (cat /root/.npm/_logs/*-debug-0.log && exit 1)
-
-# 5. Install missing Expo runtime for web support
+# Install missing Expo runtime for web support
 RUN npx expo install @expo/metro-runtime
 
-# 6. Copy the full app
-COPY . .
-
-# 7. Export the web build
+# Export the web build
 RUN npx expo export --platform web
 
-# --- Stage 2: Serve ---
+# --- Stage 3: Serve ---
 FROM nginx:alpine
+WORKDIR /usr/share/nginx/html
 
 # Configure NGINX for port 9091 and cache control
 RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf && \
     printf 'location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2)$ {\n  expires 1y;\n  add_header Cache-Control "public, immutable";\n}\n' \
     >> /etc/nginx/conf.d/default.conf
 
-# Copy static build to web root
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy only the built files from the builder stage
+COPY --from=builder /app/dist .
 
 EXPOSE 9091
 CMD ["nginx", "-g", "daemon off;"]
