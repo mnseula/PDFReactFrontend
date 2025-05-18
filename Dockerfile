@@ -1,8 +1,6 @@
 # syntax=docker/dockerfile:1.4
-
 # --- Stage 1: Build ---
 FROM node:18-alpine AS builder
-
 WORKDIR /app
 
 # 1. Install system dependencies
@@ -13,21 +11,25 @@ RUN apk add --no-cache \
 # 2. Set environment variables
 ENV NODE_ENV=production \
     CI=true \
-    EXPO_USE_STATIC=1
+    EXPO_USE_STATIC=1 \
+    NPM_CONFIG_LOGLEVEL=verbose
 
-# 3. Copy and install dependencies
+# 3. Copy package files first for better layer caching
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
 
-# ✅ Install missing Expo runtime for web support
+# 4. Install dependencies with improved error handling and networking settings
+RUN npm cache clean --force && \
+    npm config set network-timeout 300000 && \
+    npm install --legacy-peer-deps --no-optional || \
+    (cat /root/.npm/_logs/*-debug-0.log && exit 1)
+
+# 5. Install missing Expo runtime for web support
 RUN npx expo install @expo/metro-runtime
 
-# 4. Copy the full app
+# 6. Copy the full app
 COPY . .
 
-# ✅ REMOVED problematic metro.config.js override
-
-# 5. Export the web build
+# 7. Export the web build
 RUN npx expo export --platform web
 
 # --- Stage 2: Serve ---
