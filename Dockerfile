@@ -11,16 +11,14 @@ RUN apk add --no-cache bash git python3 make g++ \
     pango-dev \
     giflib-dev
 
-# Install Expo CLI globally
-# Using npx instead of global install to avoid Node 17+ compatibility issues
+# Install serve-handler globally
 RUN npm install -g serve-handler
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with specific react-native-web version
-RUN npm install
-RUN npm install react-native-web@latest
+# Install dependencies (use legacy-peer-deps to handle dependency conflicts)
+RUN npm install --legacy-peer-deps
 
 # Copy the rest of the application
 COPY . .
@@ -28,8 +26,8 @@ COPY . .
 # make the deploy-production.sh executable if it exists
 RUN if [ -f deploy-production.sh ]; then chmod +x deploy-production.sh; fi
 
-# Build the production version of the app using npx
-RUN npx expo export:web
+# Build the production version of the app using npx and forcing legacy behavior
+RUN npx --legacy-peer-deps expo export:web || npx --legacy-peer-deps expo export
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -44,9 +42,12 @@ RUN echo '#!/bin/sh' > /app/start-prod.sh && \
     echo 'cd /app/web-build && serve-handler --port 9091 --public .' >> /app/start-prod.sh && \
     chmod +x /app/start-prod.sh
 
-# Debug: List files to ensure the script exists
+# Debug: List files to ensure the script exists and the web-build directory was created
 RUN ls -la /app/
-RUN ls -la /app/web-build || echo "web-build directory not found"
+RUN find /app -name "web-build" -type d || echo "web-build directory not found, checking for alternative build outputs:"
+RUN ls -la /app/dist || echo "dist directory not found"
+RUN ls -la /app/build || echo "build directory not found"
+RUN ls -la /app/expo-dist || echo "expo-dist directory not found"
 
 # Set the default command to run when starting the container
 CMD ["/bin/sh", "/app/start-prod.sh"]
