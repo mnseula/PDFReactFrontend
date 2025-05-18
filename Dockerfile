@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # --- Stage 1: Build ---
 FROM node:18-alpine AS builder
 
@@ -8,27 +9,33 @@ RUN apk add --no-cache \
     bash git python3 make g++ \
     jpeg-dev cairo-dev pango-dev giflib-dev
 
-# 2. Configure environment
+# 2. Configure production environment
 ENV NODE_ENV=production \
     EXPO_NO_DEV=true \
     EXPO_NO_METRO=true \
     CI=true
 
-# 3. Copy package files first
+# 3. Copy package files first for caching
 COPY package*.json ./
 
 # 4. Install dependencies with web support
 RUN npm install --legacy-peer-deps && \
-    npm install react-native-web@~0.19.6 @expo/webpack-config @expo/metro-config --legacy-peer-deps
+    npm install react-native-web@~0.19.6 @expo/webpack-config --legacy-peer-deps
 
 # 5. Copy app code
 COPY . .
 
-# 6. Debug web export - remove output suppression
-RUN npx expo export:web --no-dev --minify --clear
+# 6. Build web export with correct flags
+RUN npx expo export:web --minify
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
+
+# Configure Nginx
+RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf
+
+# Copy built assets
 COPY --from=builder /app/web-build /usr/share/nginx/html
+
 EXPOSE 9091
 CMD ["nginx", "-g", "daemon off;"]
