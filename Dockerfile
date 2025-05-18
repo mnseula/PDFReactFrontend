@@ -23,6 +23,9 @@ RUN npm install
 # Copy the rest of the application
 COPY . .
 
+# make the deploy-production.sh executable
+RUN chmod +x deploy-production.sh
+
 # Build the production version of the app
 RUN expo build:web
 
