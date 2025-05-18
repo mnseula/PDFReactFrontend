@@ -31,10 +31,10 @@ RUN npx expo export
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=8081
+ENV PORT=9091
 
 # Expose the web server port
-EXPOSE 8081
+EXPOSE 9091
 
 # Create script to run the app in production mode
 RUN echo '#!/bin/sh\n\
