@@ -19,7 +19,7 @@ COPY package*.json ./
 
 # 4. Install exact versions of critical dependencies
 RUN npm install --legacy-peer-deps --ignore-scripts && \
-    npx expo install --check && \
+    npx expo install react-native@0.73.6 -- --legacy-peer-deps && \
     npx expo install react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
     npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
 
