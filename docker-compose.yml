@@ -9,7 +9,7 @@ services:
     volumes:
       - ./web-build:/app/web-build
     ports:
-      - "9091:8081"
+      - "9091:9091"  # ✅ Map host:container correctly
     environment:
       - NODE_ENV=production
     restart: unless-stopped
