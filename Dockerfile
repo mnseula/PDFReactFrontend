@@ -3,7 +3,7 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies required for building native modules
+# Install all system dependencies in a single RUN
 RUN apk add --no-cache \
     bash \
     git \
@@ -15,45 +15,42 @@ RUN apk add --no-cache \
     pango-dev \
     giflib-dev
 
-# Install serve-handler globally
+# Install global dependencies
 RUN npm install -g serve-handler
 
-# Copy only dependency files to leverage Docker cache
+# Copy package files first to leverage Docker cache
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm install --omit=dev --legacy-peer-deps && \
+# Install all npm dependencies in a single RUN
+RUN npm install --legacy-peer-deps && \
     npx expo install react-native-web@~0.19.6 react-dom@18.2.0 @expo/metro-runtime@~3.1.3 -- --legacy-peer-deps && \
-    npm install react-native-blob-util --legacy-peer-deps --omit=dev
+    npm install react-native-blob-util --legacy-peer-deps
 
-# Copy the rest of the app source code
+# Copy application code
 COPY . .
 
-# Make any custom shell scripts executable (if they exist)
-RUN chmod +x /app/deploy-production.sh 2>/dev/null || true
+# Set environment variables for production build
+ENV NODE_ENV=production \
+    EXPO_NO_DEV=true \
+    EXPO_NO_METRO=true \
+    PORT=9091
 
-# Attempt to build the web export
-RUN npx expo export:web -- --legacy-peer-deps || \
-    (echo "Expo export failed, trying npm run web..." && npm run web || echo "Web build failed.")
+# Build the application
+RUN npx expo export:web --no-dev --minify --clear || \
+    (echo "Expo export failed, trying npm run web..." && npm run web || echo "Web build failed")
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=9091
-
-# Expose the port
-EXPOSE 9091
-
-# Create a simplified production start script
-RUN echo '#!/bin/sh' > /app/start-prod.sh && \
-    echo 'set -x' >> /app/start-prod.sh && \
-    echo 'cd /app/web-build 2>/dev/null || cd /app/dist 2>/dev/null || cd /app/build 2>/dev/null || {' >> /app/start-prod.sh && \
-    echo '  echo "No web build found. Creating fallback page."' >> /app/start-prod.sh && \
-    echo '  mkdir -p /app/fallback-web' >> /app/start-prod.sh && \
-    echo '  echo "<html><body><h1>Build Failed</h1></body></html>" > /app/fallback-web/index.html' >> /app/start-prod.sh && \
-    echo '  cd /app/fallback-web' >> /app/start-prod.sh && \
-    echo '}' >> /app/start-prod.sh && \
-    echo 'serve-handler --port 9091 --public . 2>&1' >> /app/start-prod.sh && \
+# Create production start script
+RUN echo '#!/bin/sh\n\
+set -x\n\
+echo "Starting PDF Processor App in production mode..."\n\
+cd /app/web-build || cd /app/dist || cd /app/build || cd /app/fallback-web || {\n\
+  echo "No valid build directory found. Creating fallback page..."\n\
+  mkdir -p /app/fallback-web\n\
+  echo "<html><head><title>PDF Processor</title></head><body><h1>PDF Processor App</h1><p>Build failed - please check Docker logs.</p></body></html>" > /app/fallback-web/index.html\n\
+  cd /app/fallback-web\n\
+}\n\
+serve-handler --port 9091 --public . 2>&1' > /app/start-prod.sh && \
     chmod +x /app/start-prod.sh
 
-# Default CMD
+EXPOSE 9091
 CMD ["/bin/sh", "/app/start-prod.sh"]
