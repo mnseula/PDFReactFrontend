@@ -31,13 +31,13 @@ RUN expo build:web
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=9001
+ENV PORT=9091
 
 # Expose the web server port
-EXPOSE 9001
+EXPOSE 9091
 
 # Create script to run the app in production mode
-RUN printf '#!/bin/sh\necho "Starting PDF Processor App in production mode..."\ncd web-build && serve-handler --port 9001 --public .\n' > /app/start-prod.sh
+RUN printf '#!/bin/sh\necho "Starting PDF Processor App in production mode..."\ncd web-build && serve-handler --port 9091 --public .\n' > /app/start-prod.sh
 
 # Make the script executable
 RUN chmod +x /app/start-prod.sh
