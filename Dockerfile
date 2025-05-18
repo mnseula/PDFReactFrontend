@@ -42,10 +42,9 @@ RUN { npx expo export:web || npx expo export --platform web; } && \
 # --- Stage 2: Serve ---
 FROM nginx:alpine
 
-# Configure Nginx
-RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf && \
-    printf 'location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2)$ {\n  expires 1y;\n  add_header Cache-Control "public, immutable";\n}\n' \
-    >> /etc/nginx/conf.d/default.conf
+# Replace the entire default config instead of modifying it
+RUN rm /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built assets
 COPY --from=builder /app/web-build /usr/share/nginx/html
