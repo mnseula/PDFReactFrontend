@@ -11,8 +11,8 @@ RUN apk add --no-cache bash git python3 make g++ \
     pango-dev \
     giflib-dev
 
-# Install EAS CLI and serve-handler globally (Expo CLI will be used from local project dependencies)
-RUN npm install -g eas-cli serve-handler
+# Install Expo CLI globally
+RUN npm install -g expo-cli eas-cli serve-handler
 
 # Copy package files
 COPY package*.json ./
@@ -26,8 +26,8 @@ COPY . .
 # make the deploy-production.sh executable
 RUN chmod +x deploy-production.sh
 
-# Build/export the web version of the app using the local Expo CLI
-RUN npx expo export
+# Build the production version of the app
+RUN expo build:web
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -36,11 +36,14 @@ ENV PORT=9091
 # Expose the web server port
 EXPOSE 9091
 
-# Create script to run the app in production mode
-RUN echo -e '#!/bin/sh\n\
-echo "Starting PDF Processor App in production mode..."\n\
-cd dist && serve-handler --port 9091 --public .\n\
-' > /app/start-prod.sh && chmod +x /app/start-prod.sh
+# Create the start script directly in the Dockerfile
+RUN echo '#!/bin/sh' > /app/start-prod.sh && \
+    echo 'echo "Starting PDF Processor App in production mode..."' >> /app/start-prod.sh && \
+    echo 'cd /app/web-build && serve-handler --port 9091 --public .' >> /app/start-prod.sh && \
+    chmod +x /app/start-prod.sh
+
+# Debug: List files to ensure the script exists
+RUN ls -la /app/
 
 # Set the default command to run when starting the container
-CMD ["/app/start-prod.sh"]
+CMD ["/bin/sh", "/app/start-prod.sh"]
