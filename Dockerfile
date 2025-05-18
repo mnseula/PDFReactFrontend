@@ -4,7 +4,7 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# 1. Install minimal system dependencies
+# 1. Install system dependencies
 RUN apk add --no-cache \
     bash python3 make g++ \
     jpeg-dev cairo-dev pango-dev
@@ -25,16 +25,14 @@ RUN npm install --legacy-peer-deps && \
 # 5. Apply critical React Native web patches
 RUN sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
     node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js && \
-    sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
-    node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js && \
     sed -i "s/from '..\/Utilities\/Platform'/from 'react-native\/dist\/exports\/Platform'/g" \
     node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js
 
 # 6. Copy app code
 COPY . .
 
-# 7. Build web export with proper platform configuration
-RUN npx expo export:web
+# 7. Build web export using Metro bundler
+RUN npx expo export --platform web
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
@@ -45,7 +43,7 @@ RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf && 
     >> /etc/nginx/conf.d/default.conf
 
 # Copy built assets
-COPY --from=builder --chown=nginx:nginx /app/web-build /usr/share/nginx/html
+COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html
 
 EXPOSE 9091
 CMD ["nginx", "-g", "daemon off;"]
