@@ -39,7 +39,7 @@ EXPOSE 9091
 # Create script to run the app in production mode
 RUN echo -e '#!/bin/sh\n\
 echo "Starting PDF Processor App in production mode..."\n\
-cd dist && serve-handler --port 8081 --public .\n\
+cd dist && serve-handler --port 9091 --public .\n\
 ' > /app/start-prod.sh && chmod +x /app/start-prod.sh
 
 # Set the default command to run when starting the container
