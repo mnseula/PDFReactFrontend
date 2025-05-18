@@ -17,22 +17,26 @@ ENV NODE_ENV=production \
 # 3. Copy package files first for caching
 COPY package*.json ./
 
-# 4. Install dependencies with web support
+# 4. Install dependencies with exact versions
 RUN npm install --legacy-peer-deps && \
-    npx expo install react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
-    npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
+    npx expo install react-native@0.73.6 react-dom@18.2.0 react-native-web@~0.19.6 -- --legacy-peer-deps && \
+    npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util @expo/webpack-config
 
-# 5. Apply critical React Native web patches
-RUN sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
-    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js && \
-    sed -i "s/from '..\/Utilities\/Platform'/from 'react-native\/dist\/exports\/Platform'/g" \
-    node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js
+# 5. Create Platform shim for web
+RUN mkdir -p node_modules/react-native-web/dist/exports && \
+    echo "export default { OS: 'web', select: obj => (obj.web || obj.default) };" > node_modules/react-native-web/dist/exports/Platform.js
 
-# 6. Copy app code
+# 6. Apply Metro config patches
+RUN sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" \
+    node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js && \
+    sed -i "s/require('..\/Utilities\/Platform')/require('react-native-web\/dist\/exports\/Platform')/g" \
+    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js
+
+# 7. Copy app code
 COPY . .
 
-# 7. Build web export using Metro bundler
-RUN npx expo export --platform web
+# 8. Build web export using Webpack
+RUN npx expo export:web
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
@@ -43,7 +47,7 @@ RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf && 
     >> /etc/nginx/conf.d/default.conf
 
 # Copy built assets
-COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html
+COPY --from=builder --chown=nginx:nginx /app/web-build /usr/share/nginx/html
 
 EXPOSE 9091
 CMD ["nginx", "-g", "daemon off;"]
