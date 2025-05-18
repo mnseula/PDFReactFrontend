@@ -13,14 +13,3 @@ services:
     environment:
       - NODE_ENV=production
     restart: unless-stopped
-    
-  nginx:
-    image: nginx:stable-alpine
-    container_name: pdf-processor-nginx
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      - pdf-processor-app
-    restart: unless-stopped
