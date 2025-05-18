@@ -12,22 +12,24 @@ RUN apk add --no-cache bash git python3 make g++ \
     giflib-dev
 
 # Install Expo CLI globally
-RUN npm install -g expo-cli eas-cli serve-handler
+# Using npx instead of global install to avoid Node 17+ compatibility issues
+RUN npm install -g serve-handler
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies with specific react-native-web version
 RUN npm install
+RUN npm install react-native-web@latest
 
 # Copy the rest of the application
 COPY . .
 
-# make the deploy-production.sh executable
-RUN chmod +x deploy-production.sh
+# make the deploy-production.sh executable if it exists
+RUN if [ -f deploy-production.sh ]; then chmod +x deploy-production.sh; fi
 
-# Build the production version of the app
-RUN expo build:web
+# Build the production version of the app using npx
+RUN npx expo export:web
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -44,6 +46,7 @@ RUN echo '#!/bin/sh' > /app/start-prod.sh && \
 
 # Debug: List files to ensure the script exists
 RUN ls -la /app/
+RUN ls -la /app/web-build || echo "web-build directory not found"
 
 # Set the default command to run when starting the container
 CMD ["/bin/sh", "/app/start-prod.sh"]
