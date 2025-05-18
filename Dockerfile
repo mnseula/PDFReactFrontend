@@ -1,5 +1,4 @@
 # syntax=docker/dockerfile:1.4
-# --- Stage 1: Build ---
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -17,33 +16,29 @@ ENV NODE_ENV=production \
 # 3. Copy package files first for caching
 COPY package*.json ./
 
-# 4. Install dependencies with exact versions
+# 4. Install dependencies
 RUN npm install --legacy-peer-deps && \
     npx expo install react-native@0.73.6 react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
     npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
 
-# 5. Force Webpack configuration
-RUN echo "module.exports = require('@expo/webpack-config');" > webpack.config.js && \
-    echo '{ "expo": { "web": { "bundler": "webpack" } } }' > app.config.json
+# 5. Apply critical Platform module fix
+RUN mkdir -p node_modules/react-native-web/dist/exports && \
+    echo "export default { OS: 'web', select: obj => (obj.web || obj.default) };" > node_modules/react-native-web/dist/exports/Platform.js && \
+    find node_modules/react-native/Libraries -type f -exec sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" {} +
 
-# 6. Apply critical patches
-RUN sed -i "s/from '..\/Utilities\/Platform'/from 'react-native\/dist\/exports\/Platform'/g" \
-    node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js && \
-    sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
-    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js
-
-# 7. Copy app code
+# 6. Copy app code
 COPY . .
 
-# 8. Build web export (works with either command)
-RUN { npx expo export:web || npx expo export --platform web; } && \
-    [ -d web-build ] || { mkdir -p web-build && echo "<h1>Fallback</h1>" > web-build/index.html; }
+# 7. Build web export with verbose output
+RUN npx expo export:web --max-workers=1 || \
+    (echo "Build failed, dumping debug info..." && \
+     cat /app/metro.log && \
+     exit 1)
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
 
-# Replace the entire default config instead of modifying it
-RUN rm /etc/nginx/conf.d/default.conf
+# Custom Nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built assets
