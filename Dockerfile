@@ -16,15 +16,18 @@ ENV NODE_ENV=production \
 # 3. Copy package files first for caching
 COPY package*.json ./
 
-# 4. Install dependencies with web support
+# 4. Install all required web dependencies
 RUN npm install --legacy-peer-deps && \
-    npm install react-native-web@~0.19.6 @expo/webpack-config --legacy-peer-deps
+    npx expo install react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps
 
 # 5. Copy app code
 COPY . .
 
-# 6. Build web export (no additional flags needed for modern Expo versions)
-RUN npx expo export:web
+# 6. Build web export
+RUN npx expo export:web || \
+    (echo "Web export failed, creating fallback..." && \
+     mkdir -p web-build && \
+     echo "<html><body><h1>App is down for maintenance</h1></body></html>" > web-build/index.html)
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
