@@ -1,43 +1,43 @@
-# Use an official Node.js runtime as a parent image
-FROM node:18
+FROM node:18-alpine
 
-# Set the working directory in the container
-WORKDIR /usr/src/app
+# Set working directory
+WORKDIR /app
 
-# --- Install Cocoapods ---
-# Install Ruby, Java, Android SDK dependencies, and other build essentials
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ruby \
-    ruby-dev \
-    build-essential \
-    openjdk-17-jdk \
-    wget \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apk add --no-cache bash git python3 make g++ \
+    && apk add --no-cache --virtual .build-deps \
+    jpeg-dev \
+    cairo-dev \
+    pango-dev \
+    giflib-dev
 
-# Install Cocoapods using gem
-RUN gem install cocoapods
+# Install Expo CLI globally
+RUN npm install -g expo-cli eas-cli serve-handler
 
-# --- Install Android SDK ---
-ENV ANDROID_SDK_ROOT /opt/android-sdk
-ENV PATH $PATH:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools
+# Copy package files
+COPY package*.json ./
 
-RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools && \
-    wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip && \
-    unzip /tmp/cmdline-tools.zip -d ${ANDROID_SDK_ROOT}/cmdline-tools && \
-    mv ${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools ${ANDROID_SDK_ROOT}/cmdline-tools/latest && \
-    rm /tmp/cmdline-tools.zip
+# Install dependencies
+RUN npm install
 
-RUN yes | sdkmanager --licenses > /dev/null && \
-    sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-
-# --- Application Setup ---
-COPY package.json package-lock.json ./
-RUN npm ci
-
+# Copy the rest of the application
 COPY . .
-RUN cd ios && pod install && cd ..
 
+# Build the production version of the app
+RUN expo build:web
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=8081
+
+# Expose the web server port
 EXPOSE 8081
-EXPOSE 3000
-CMD ["npm", "start"]
+
+# Create script to run the app in production mode
+RUN echo '#!/bin/sh\n\
+echo "Starting PDF Processor App in production mode..."\n\
+cd web-build && serve-handler --port 8081 --public .\n\
+' > /app/start-prod.sh && chmod +x /app/start-prod.sh
+
+# Set the default command to run when starting the container
+CMD ["/app/start-prod.sh"]
