@@ -20,35 +20,35 @@ ENV NODE_ENV=production \
 # Copy package files first for optimal caching
 COPY package*.json ./
 
-# Install all dependencies in one atomic operation with suppressed output
-RUN npm install --legacy-peer-deps --no-warnings --no-fund --no-audit && \
-    npx expo install --yes react-native-web@~0.19.6 react-dom@18.2.0 @expo/metro-runtime@~3.1.3 -- --legacy-peer-deps --no-warnings 2>/dev/null && \
-    npm install --no-warnings react-native-blob-util --legacy-peer-deps 2>/dev/null
+# Install all dependencies and Expo-required packages
+RUN npm install --legacy-peer-deps --no-fund --no-audit && \
+    npx expo install --yes react-native-web@~0.19.6 react-dom@18.2.0 @expo/metro-runtime@~3.1.3 -- --legacy-peer-deps && \
+    npm install react-native-blob-util --legacy-peer-deps
 
-# Copy application code
+# Copy the full application code
 COPY . .
 
-# Build with suppressed non-essential output
-RUN npx expo export:web --no-dev --minify --clear --non-interactive >/dev/null 2>&1 || \
-    (echo "Expo export failed, trying npm run web..." && npm run web --silent >/dev/null 2>&1 || echo "Continuing without build")
+# Build the web project
+RUN npx expo export:web --no-dev --minify --clear --non-interactive || \
+    (echo "Expo export failed, trying npm run web..." && npm run web || echo "Continuing without build")
 
 # --- Stage 2: Runtime ---
 FROM nginx:stable-alpine
 
-# Configure Nginx
+# Configure Nginx to use port 9091
 RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf && \
     sed -i 's/^worker_processes.*/worker_processes auto;/' /etc/nginx/nginx.conf
 
-# Add cache headers for static assets
+# Set cache headers for static assets
 RUN printf 'location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2)$ {\n  expires 1y;\n  add_header Cache-Control "public, immutable";\n  add_header X-Content-Type-Options "nosniff";\n}\n' \
     >> /etc/nginx/conf.d/default.conf
 
-# Copy built assets with priority order and proper permissions
+# Copy build output from builder
 COPY --from=builder --chown=nginx:nginx /app/web-build /usr/share/nginx/html
-COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html/ 2>/dev/null || :
-COPY --from=builder --chown=nginx:nginx /app/build /usr/share/nginx/html/ 2>/dev/null || :
+COPY --from=builder --chown=nginx:nginx /app/dist /usr/share/nginx/html/ || true
+COPY --from=builder --chown=nginx:nginx /app/build /usr/share/nginx/html/ || true
 
-# Only add fallback if no index.html exists
+# Fallback: add simple HTML if no index.html exists
 RUN test -f /usr/share/nginx/html/index.html || \
     echo "<html><head><title>PDF Processor</title></head><body><h1>PDF Processor App</h1><p>Build failed - please check logs.</p></body></html>" \
     > /usr/share/nginx/html/index.html
