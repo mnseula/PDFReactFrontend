@@ -19,24 +19,17 @@ COPY package*.json ./
 
 # 4. Install dependencies with exact versions
 RUN npm install --legacy-peer-deps && \
-    npx expo install react-native@0.73.6 react-dom@18.2.0 react-native-web@~0.19.6 -- --legacy-peer-deps && \
-    npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util @expo/webpack-config
+    npx expo install react-native@0.73.6 react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
+    npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
 
-# 5. Create Platform shim for web
-RUN mkdir -p node_modules/react-native-web/dist/exports && \
-    echo "export default { OS: 'web', select: obj => (obj.web || obj.default) };" > node_modules/react-native-web/dist/exports/Platform.js
+# 5. Force Webpack configuration
+RUN echo "module.exports = require('@expo/webpack-config');" > webpack.config.js
 
-# 6. Apply Metro config patches
-RUN sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" \
-    node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js && \
-    sed -i "s/require('..\/Utilities\/Platform')/require('react-native-web\/dist\/exports\/Platform')/g" \
-    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js
-
-# 7. Copy app code
+# 6. Copy app code
 COPY . .
 
-# 8. Build web export using Webpack
-RUN npx expo export:web
+# 7. Build web export using the correct command
+RUN npx expo export -p web
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
@@ -47,7 +40,7 @@ RUN sed -i 's/listen\(.*\)80;/listen\19091;/' /etc/nginx/conf.d/default.conf && 
     >> /etc/nginx/conf.d/default.conf
 
 # Copy built assets
-COPY --from=builder --chown=nginx:nginx /app/web-build /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 9091
 CMD ["nginx", "-g", "daemon off;"]
