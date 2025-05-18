@@ -19,17 +19,13 @@ COPY package*.json ./
 
 # 4. Install dependencies with web support
 RUN npm install --legacy-peer-deps && \
-    npm install react-native-web@~0.19.6 @expo/webpack-config --legacy-peer-deps && \
-    npx expo install -- --legacy-peer-deps
+    npm install react-native-web@~0.19.6 @expo/webpack-config @expo/metro-config --legacy-peer-deps
 
 # 5. Copy app code
 COPY . .
 
-# 6. Build with error visibility
-RUN npx expo export:web --no-dev --minify --clear || \
-    (echo "Build failed, generating fallback..." && \
-     mkdir -p web-build && \
-     echo "<html><body><h1>App Failed to Build</h1></body></html>" > web-build/index.html)
+# 6. Debug web export - remove output suppression
+RUN npx expo export:web --no-dev --minify --clear
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
