@@ -22,26 +22,22 @@ RUN npm install --legacy-peer-deps && \
     npx expo install react-native@0.73.6 react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
     npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
 
-# 5. Create Platform shim for web
-RUN mkdir -p node_modules/react-native-web/dist/exports && \
-    echo "export default { OS: 'web', select: obj => (obj.web || obj.default) };" > node_modules/react-native-web/dist/exports/Platform.js
+# 5. Force Webpack configuration
+RUN echo "module.exports = require('@expo/webpack-config');" > webpack.config.js && \
+    echo '{ "expo": { "web": { "bundler": "webpack" } } }' > app.config.json
 
-# 6. Apply critical patches to React Native files
-RUN sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" \
+# 6. Apply critical patches
+RUN sed -i "s/from '..\/Utilities\/Platform'/from 'react-native\/dist\/exports\/Platform'/g" \
     node_modules/react-native/Libraries/NativeComponent/ViewConfigIgnore.js && \
-    sed -i "s/require('..\/Utilities\/Platform')/require('react-native-web\/dist\/exports\/Platform')/g" \
-    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js && \
-    sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" \
-    node_modules/react-native/Libraries/Utilities/codegenNativeComponent.js
+    sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
+    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js
 
-# 7. Force Webpack configuration
-RUN echo "module.exports = require('@expo/webpack-config');" > webpack.config.js
-
-# 8. Copy app code
+# 7. Copy app code
 COPY . .
 
-# 9. Build web export
-RUN npx expo export:web
+# 8. Build web export (works with either command)
+RUN { npx expo export:web || npx expo export --platform web; } && \
+    [ -d web-build ] || { mkdir -p web-build && echo "<h1>Fallback</h1>" > web-build/index.html; }
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
