@@ -11,8 +11,6 @@ RUN apk add --no-cache \
 
 # 2. Configure production environment
 ENV NODE_ENV=production \
-    EXPO_NO_DEV=true \
-    EXPO_NO_METRO=true \
     CI=true
 
 # 3. Copy package files first for caching
@@ -25,8 +23,8 @@ RUN npm install --legacy-peer-deps && \
 # 5. Copy app code
 COPY . .
 
-# 6. Build web export with correct flags
-RUN npx expo export:web --minify
+# 6. Build web export (no additional flags needed for modern Expo versions)
+RUN npx expo export:web
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
