@@ -18,14 +18,16 @@ ENV NODE_ENV=production \
 COPY package*.json ./
 
 # 4. Install exact versions of critical dependencies
-RUN npm install --legacy-peer-deps && \
+RUN npm install --legacy-peer-deps --ignore-scripts && \
     npx expo install --check && \
     npx expo install react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
     npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
 
-# 5. Apply critical patch for React Native Web compatibility
+# 5. Apply proper web compatibility fix
 RUN sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
-    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js
+    node_modules/react-native/Libraries/NativeComponent/NativeComponentRegistry.js && \
+    sed -i "s/require('..\/Utilities\/Platform')/require('react-native\/dist\/exports\/Platform')/g" \
+    node_modules/react-native/Libraries/Utilities/codegenNativeComponent.js
 
 # 6. Copy app code
 COPY . .
