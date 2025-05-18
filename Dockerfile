@@ -31,13 +31,13 @@ RUN npx expo export
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=9091
+ENV PORT=8081
 
 # Expose the web server port
-EXPOSE 9091
+EXPOSE 8081
 
 # Create script to run the app in production mode
-RUN echo '#!/bin/sh\n\
+RUN echo -e '#!/bin/sh\n\
 echo "Starting PDF Processor App in production mode..."\n\
 cd dist && serve-handler --port 8081 --public .\n\
 ' > /app/start-prod.sh && chmod +x /app/start-prod.sh
