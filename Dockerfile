@@ -16,29 +16,34 @@ ENV NODE_ENV=production \
 # 3. Copy package files first for caching
 COPY package*.json ./
 
-# 4. Install dependencies
+# 4. Install dependencies with exact versions
 RUN npm install --legacy-peer-deps && \
     npx expo install react-native@0.73.6 react-dom@18.2.0 react-native-web@~0.19.6 @expo/webpack-config -- --legacy-peer-deps && \
     npm install --legacy-peer-deps @expo/metro-runtime react-native-blob-util
 
-# 5. Apply critical Platform module fix
+# 5. Create Platform shim for web
 RUN mkdir -p node_modules/react-native-web/dist/exports && \
-    echo "export default { OS: 'web', select: obj => (obj.web || obj.default) };" > node_modules/react-native-web/dist/exports/Platform.js && \
-    find node_modules/react-native/Libraries -type f -exec sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" {} +
+    echo "export default { OS: 'web', select: obj => (obj.web || obj.default) };" > node_modules/react-native-web/dist/exports/Platform.js
 
-# 6. Copy app code
+# 6. Apply critical patches
+RUN find node_modules/react-native/Libraries -type f -exec sed -i "s/from '..\/Utilities\/Platform'/from 'react-native-web\/dist\/exports\/Platform'/g" {} + && \
+    find node_modules/react-native/Libraries -type f -exec sed -i "s/require('..\/Utilities\/Platform')/require('react-native-web\/dist\/exports\/Platform')/g" {} +
+
+# 7. Force Webpack configuration
+RUN echo "module.exports = require('@expo/webpack-config');" > webpack.config.js && \
+    echo '{ \"expo\": { \"web\": { \"bundler\": \"webpack\" } } }' > app.config.json
+
+# 8. Copy app code
 COPY . .
 
-# 7. Build web export with verbose output
-RUN npx expo export:web --max-workers=1 || \
-    (echo "Build failed, dumping debug info..." && \
-     cat /app/metro.log && \
-     exit 1)
+# 9. Build web export with debug logging
+RUN npx expo export:web 2>&1 | tee build.log || \
+    { echo "Build failed - showing logs:"; cat build.log; exit 1; }
 
 # --- Stage 2: Serve ---
 FROM nginx:alpine
 
-# Custom Nginx config
+# Configure Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built assets
