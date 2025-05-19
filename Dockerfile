@@ -9,10 +9,11 @@ RUN apk add --no-cache \
     git # Adding git which is sometimes needed for npm installations
 
 # 2. Configure production environment
+# Adding verbose npm logging for better debugging
 ENV NODE_ENV=production \
     CI=true \
     EXPO_USE_STATIC=1 \
-    NPM_CONFIG_LOGLEVEL=verbose # Add more verbose npm logging
+    NPM_CONFIG_LOGLEVEL=verbose
 
 # 3. Copy package files first for caching
 COPY package*.json ./
