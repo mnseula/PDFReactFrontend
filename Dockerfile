@@ -54,7 +54,7 @@ RUN { \
         cat build.log >> web-build/index.html && \
         echo '</pre></body></html>' >> web-build/index.html; \
       fi; \
-      exit $BUILD_EXIT_CODE; \
+      exit 0; \
     }
 
 # --- Stage 2: Serve ---
