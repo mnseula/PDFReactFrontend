@@ -39,22 +39,25 @@ COPY . .
 # 8. Build web export with detailed logging
 RUN mkdir -p web-build && \
     { \
+      set -o pipefail; \
       echo "Starting build process..."; \
-      # Ensure output goes to web-build
-      npx expo export:web --output-dir web-build 2>&1 | tee build.log; \
-      BUILD_EXIT_CODE=$?; \
-      if [ $BUILD_EXIT_CODE -ne 0 ]; then \
-        echo "Build failed with exit code $BUILD_EXIT_CODE"; \
+      if npx expo export:web --output-dir web-build 2>&1 | tee build.log; then \
+        echo "Build successful. Application is in web-build/"; \
+        # Optionally, you could remove build.log here if successful to save a tiny bit of space
+        # rm -f build.log;
+      else \
+        BUILD_FAIL_CODE=$?; \
+        echo "Build failed with exit code $BUILD_FAIL_CODE"; \
         echo "Build logs:"; \
         cat build.log; \
-        echo "Creating fallback assets..."; \
+        echo "Creating fallback assets in web-build..."; \
         # Clean web-build in case expo export partially wrote to it before failing
         rm -rf web-build/*; \
+        echo '<!DOCTYPE html><html><head><title>App Error</title><style>body{font-family:sans-serif;padding:2rem;color:#333}</style></head><body><h1>Application Error</h1><p>The build failed. Please check the logs.</p><pre>' > web-build/index.html; \
+        # build.log will exist due to tee, even if empty on some tee versions for immediate command failure
+        if [ -f build.log ]; then cat build.log >> web-build/index.html; else echo "No build.log found to append." >> web-build/index.html; fi; \
+        echo '</pre></body></html>' >> web-build/index.html; \
       fi; \
-      # Create minimal fallback in any case
-      echo '<!DOCTYPE html><html><head><title>App Error</title><style>body{font-family:sans-serif;padding:2rem;color:#333}</style></head><body><h1>Application Error</h1><p>The build failed. Please check the logs.</p><pre>' > web-build/index.html; \
-      [ -f build.log ] && cat build.log >> web-build/index.html || echo "No build logs available" >> web-build/index.html; \
-      echo '</pre></body></html>' >> web-build/index.html; \
     }
 
 # --- Stage 2: Serve ---
