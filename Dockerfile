@@ -14,12 +14,17 @@ ENV NODE_ENV=production \
     EXPO_USE_STATIC=1 \
     NPM_CONFIG_LOGLEVEL=verbose
 
-# 3. Copy package files first for caching
+# 3. Copy ALL package files including lockfile
 COPY package*.json ./
 COPY yarn.lock* ./
+COPY package-lock.json* ./  # Add this line
 
-# 4. Install dependencies (clean install for safety)
-RUN npm ci --legacy-peer-deps
+# 4. Install dependencies - using regular install if lockfile is missing
+RUN if [ -f package-lock.json ]; then \
+      npm ci --legacy-peer-deps; \
+    else \
+      npm install --legacy-peer-deps; \
+    fi
 
 # 5. Install exact versions of critical dependencies
 RUN npx expo install --check
@@ -30,16 +35,13 @@ COPY . .
 # 7. Verify environment
 RUN echo "Node version: $(node --version)" && \
     echo "NPM version: $(npm --version)" && \
-    echo "Expo CLI version: $(npx expo --version)" && \
-    echo "Project dependencies:" && npm list --depth=0
+    echo "Expo CLI version: $(npx expo --version)"
 
-# 8. Build web export (modern Expo 50 approach)
+# 8. Build web export
 RUN npx expo export:web && \
-    # Expo 50 creates files in web-build directory by default
     # Verify the output exists
     [ -d "web-build" ] || { \
       echo "Build failed - web-build directory not created"; \
-      echo "Creating fallback..."; \
       mkdir -p web-build && \
       echo '<!DOCTYPE html><html><head><title>App Error</title></head><body><h1>Build Failed</h1><p>Check Docker build logs</p></body></html>' > web-build/index.html; \
       exit 1; \
@@ -51,7 +53,7 @@ FROM nginx:alpine
 # Configure Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy built assets (Expo 50 uses web-build by default)
+# Copy built assets
 COPY --from=builder /app/web-build /usr/share/nginx/html
 
 EXPOSE 9091
