@@ -14,13 +14,15 @@ ENV NODE_ENV=production \
     EXPO_USE_STATIC=1 \
     NPM_CONFIG_LOGLEVEL=verbose
 
-# 3. Copy ALL package files including lockfile
+# 3. Copy package files (including any lockfiles that exist)
 COPY package*.json ./
 COPY yarn.lock* ./
-COPY package-lock.json* ./  # Add this line
+COPY package-lock.json* ./ || echo "No package-lock.json found, continuing..."
 
-# 4. Install dependencies - using regular install if lockfile is missing
-RUN if [ -f package-lock.json ]; then \
+# 4. Install dependencies - works with or without lockfile
+RUN if [ -f yarn.lock ]; then \
+      yarn install --frozen-lockfile; \
+    elif [ -f package-lock.json ]; then \
       npm ci --legacy-peer-deps; \
     else \
       npm install --legacy-peer-deps; \
