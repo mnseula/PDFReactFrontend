@@ -37,7 +37,8 @@ RUN echo "module.exports = require('@expo/webpack-config');" > webpack.config.js
 COPY . .
 
 # 8. Build web export with detailed logging
-RUN { \
+RUN mkdir -p web-build && \
+    { \
       echo "Starting build process..."; \
       # Ensure output goes to web-build
       npx expo export:web --output-dir web-build 2>&1 | tee build.log; \
@@ -47,14 +48,13 @@ RUN { \
         echo "Build logs:"; \
         cat build.log; \
         echo "Creating fallback assets..."; \
-        mkdir -p web-build && \
         # Clean web-build in case expo export partially wrote to it before failing
-        rm -rf web-build/* && \
-        echo '<!DOCTYPE html><html><head><title>App Error</title><style>body{font-family:sans-serif;padding:2rem;color:#333}</style></head><body><h1>Application Error</h1><p>The build failed. Please check the logs.</p><pre>' > web-build/index.html && \
-        cat build.log >> web-build/index.html && \
-        echo '</pre></body></html>' >> web-build/index.html; \
+        rm -rf web-build/*; \
       fi; \
-      exit 0; \
+      # Create minimal fallback in any case
+      echo '<!DOCTYPE html><html><head><title>App Error</title><style>body{font-family:sans-serif;padding:2rem;color:#333}</style></head><body><h1>Application Error</h1><p>The build failed. Please check the logs.</p><pre>' > web-build/index.html; \
+      [ -f build.log ] && cat build.log >> web-build/index.html || echo "No build logs available" >> web-build/index.html; \
+      echo '</pre></body></html>' >> web-build/index.html; \
     }
 
 # --- Stage 2: Serve ---
