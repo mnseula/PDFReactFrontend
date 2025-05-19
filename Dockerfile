@@ -17,10 +17,12 @@ ENV NODE_ENV=production \
 
 # 3. Copy package files first for caching
 COPY package*.json ./
-COPY app.json ./
-COPY babel.config.js ./
-COPY metro.config.js ./
-COPY webpack.config.js ./
+
+# 4. Create necessary config files (will be overwritten if they exist in the COPY step)
+RUN echo 'module.exports = function(api) { api.cache(true); return { presets: ["babel-preset-expo"] }; };' > babel.config.js && \
+    echo 'module.exports = { transformer: { assetPlugins: ["expo-asset/tools/hashAssetFiles"] } };' > metro.config.js && \
+    echo 'module.exports = require("@expo/webpack-config");' > webpack.config.js && \
+    echo '{ "expo": { "name": "MyApp", "slug": "my-app", "version": "1.0.0" } }' > app.json
 
 # 4. Install dependencies with exact versions and proper error handling
 RUN npm install --legacy-peer-deps || (echo "NPM install failed" && exit 1)
